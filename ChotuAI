@@ -1,0 +1,1482 @@
+#!/bin/bash
+set -e
+
+PROJECT="ChotuAI"
+rm -rf $PROJECT
+mkdir -p $PROJECT
+cd $PROJECT
+
+# ============ ROOT FILES ============
+cat > settings.gradle << 'EOF'
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+rootProject.name = "ChotuAI"
+include ':app'
+EOF
+
+cat > build.gradle << 'EOF'
+plugins {
+    id 'com.android.application' version '8.2.0' apply false
+    id 'org.jetbrains.kotlin.android' version '1.9.20' apply false
+}
+EOF
+
+cat > gradle.properties << 'EOF'
+org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+android.useAndroidX=true
+kotlin.code.style=official
+android.nonTransitiveRClass=true
+EOF
+
+mkdir -p gradle/wrapper
+cat > gradle/wrapper/gradle-wrapper.properties << 'EOF'
+distributionBase=GRADLE_USER_HOME
+distributionPath=wrapper/dists
+distributionUrl=https\://services.gradle.org/distributions/gradle-8.2-bin.zip
+zipStoreBase=GRADLE_USER_HOME
+zipStorePath=wrapper/dists
+EOF
+
+# ============ APP BUILD GRADLE ============
+mkdir -p app
+cat > app/build.gradle << 'EOF'
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+android {
+    namespace 'com.soikot.chotuai'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.soikot.chotuai"
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "1.0.0"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions { jvmTarget = '17' }
+    buildFeatures { viewBinding true }
+}
+
+dependencies {
+    implementation 'androidx.core:core-ktx:1.12.0'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.11.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    implementation 'androidx.recyclerview:recyclerview:1.3.2'
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    implementation 'org.json:json:20231013'
+    implementation 'androidx.security:security-crypto:1.1.0-alpha06'
+    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.7.0'
+    implementation 'androidx.webkit:webkit:1.9.0'
+}
+EOF
+
+cat > app/proguard-rules.pro << 'EOF'
+-keep class com.soikot.chotuai.** { *; }
+EOF
+
+# ============ MANIFEST ============
+mkdir -p app/src/main
+cat > app/src/main/AndroidManifest.xml << 'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="CHOTU AI"
+        android:roundIcon="@mipmap/ic_launcher"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.ChotuAI"
+        android:usesCleartextTraffic="false">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity android:name=".SettingsActivity" android:exported="false" />
+        <activity android:name=".CodingStudioActivity" android:exported="false" />
+
+        <service
+            android:name=".service.ChotuAccessibilityService"
+            android:exported="false"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
+
+    </application>
+</manifest>
+EOF
+
+# ============ RESOURCES ============
+mkdir -p app/src/main/res/{values,layout,drawable,xml,mipmap-hdpi,anim}
+
+cat > app/src/main/res/values/colors.xml << 'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#FF000000</color>
+    <color name="deep_black">#FF050508</color>
+    <color name="neon_purple">#FFB026FF</color>
+    <color name="electric_blue">#FF00D4FF</color>
+    <color name="text_primary">#FFFFFFFF</color>
+    <color name="text_secondary">#B3FFFFFF</color>
+    <color name="danger_red">#FFFF3B5C</color>
+</resources>
+EOF
+
+cat > app/src/main/res/values/strings.xml << 'EOF'
+<resources>
+    <string name="app_name">CHOTU AI</string>
+    <string name="accessibility_desc">Chotu AI screen control service.</string>
+    <string name="hint_ask_chotu">Ask Chotu anything…</string>
+</resources>
+EOF
+
+cat > app/src/main/res/values/themes.xml << 'EOF'
+<resources>
+    <style name="Theme.ChotuAI" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/neon_purple</item>
+        <item name="colorSecondary">@color/electric_blue</item>
+        <item name="android:windowBackground">@color/deep_black</item>
+        <item name="android:statusBarColor">@color/black</item>
+        <item name="android:navigationBarColor">@color/black</item>
+        <item name="android:textColorPrimary">@color/text_primary</item>
+    </style>
+</resources>
+EOF
+
+cat > app/src/main/res/drawable/bg_card_glass.xml << 'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <solid android:color="#1AFFFFFF"/>
+    <stroke android:width="1dp" android:color="#33FFFFFF"/>
+    <corners android:radius="20dp"/>
+</shape>
+EOF
+
+cat > app/src/main/res/drawable/bg_button_glow.xml << 'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <gradient android:startColor="@color/neon_purple" android:endColor="@color/electric_blue" android:angle="45"/>
+    <corners android:radius="24dp"/>
+</shape>
+EOF
+
+cat > app/src/main/res/drawable/bg_orb.xml << 'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
+    <gradient android:type="radial" android:gradientRadius="120dp"
+        android:startColor="@color/neon_purple"
+        android:centerColor="@color/electric_blue"
+        android:endColor="@color/deep_black"/>
+</shape>
+EOF
+
+cat > app/src/main/res/drawable/ic_mic.xml << 'EOF'
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M12,14c1.66,0 3,-1.34 3,-3V5c0,-1.66 -1.34,-3 -3,-3S9,3.34 9,5v6C9,12.66 10.34,14 12,14zM17.3,11c0,3 -2.54,5.1 -5.3,5.1S6.7,14 6.7,11H5c0,3.41 2.72,6.23 6,6.72V21h2v-3.28c3.28,-0.49 6,-3.31 6,-6.72H17.3z"/>
+</vector>
+EOF
+
+cat > app/src/main/res/drawable/ic_send.xml << 'EOF'
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M2.01,21L23,12 2.01,3 2,10l15,2 -15,2z"/>
+</vector>
+EOF
+
+cat > app/src/main/res/drawable/ic_settings.xml << 'EOF'
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M19.14,12.94c0.04,-0.3 0.06,-0.61 0.06,-0.94c0,-0.32 -0.02,-0.64 -0.07,-0.94l2.03,-1.58c0.18,-0.14 0.23,-0.41 0.12,-0.61l-1.92,-3.32c-0.12,-0.22 -0.37,-0.29 -0.59,-0.22l-2.39,0.96c-0.5,-0.38 -1.03,-0.7 -1.62,-0.94L14.4,2.81c-0.04,-0.24 -0.24,-0.41 -0.48,-0.41h-3.84c-0.24,0 -0.43,0.17 -0.47,0.41L9.25,5.35C8.66,5.59 8.12,5.92 7.63,6.29L5.24,5.33c-0.22,-0.08 -0.47,0 -0.59,0.22L2.74,8.87C2.62,9.08 2.66,9.34 2.86,9.48l2.03,1.58C4.84,11.36 4.8,11.69 4.8,12s0.02,0.64 0.07,0.94l-2.03,1.58c-0.18,0.14 -0.23,0.41 -0.12,0.61l1.92,3.32c0.12,0.22 0.37,0.29 0.59,0.22l2.39,-0.96c0.5,0.38 1.03,0.7 1.62,0.94l0.36,2.54c0.05,0.24 0.24,0.41 0.48,0.41h3.84c0.24,0 0.44,-0.17 0.47,-0.41l0.36,-2.54c0.59,-0.24 1.13,-0.56 1.62,-0.94l2.39,0.96c0.22,0.08 0.47,0 0.59,-0.22l1.92,-3.32c0.12,-0.22 0.07,-0.47 -0.12,-0.61L19.14,12.94zM12,15.6c-1.98,0 -3.6,-1.62 -3.6,-3.6s1.62,-3.6 3.6,-3.6s3.6,1.62 3.6,3.6S13.98,15.6 12,15.6z"/>
+</vector>
+EOF
+
+cat > app/src/main/res/drawable/ic_code.xml << 'EOF'
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M9.4,16.6L4.8,12l4.6,-4.6L8,6l-6,6l6,6L9.4,16.6zM14.6,16.6l4.6,-4.6l-4.6,-4.6L16,6l6,6l-6,6L14.6,16.6z"/>
+</vector>
+EOF
+
+cat > app/src/main/res/drawable/ic_launcher_foreground.xml << 'EOF'
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#B026FF"
+        android:pathData="M54,30 A24,24 0 1,1 54,78 A24,24 0 1,1 54,30 Z"/>
+</vector>
+EOF
+
+cat > app/src/main/res/mipmap-hdpi/ic_launcher.xml << 'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/deep_black"/>
+    <foreground android:drawable="@drawable/ic_launcher_foreground"/>
+</adaptive-icon>
+EOF
+
+cp app/src/main/res/mipmap-hdpi/ic_launcher.xml app/src/main/res/mipmap-hdpi/ic_launcher_round.xml
+
+cat > app/src/main/res/xml/accessibility_service_config.xml << 'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeAllMask"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagDefault|flagIncludeNotImportantViews|flagReportViewIds"
+    android:canPerformGestures="true"
+    android:canRetrieveWindowContent="true"
+    android:description="@string/accessibility_desc"
+    android:notificationTimeout="100" />
+EOF
+
+# ============ LAYOUTS ============
+cat > app/src/main/res/layout/activity_main.xml << 'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/deep_black"
+    android:padding="16dp">
+
+    <LinearLayout
+        android:id="@+id/topBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="CHOTU AI"
+            android:textColor="@color/text_primary"
+            android:textSize="22sp"
+            android:textStyle="bold"/>
+
+        <ImageButton
+            android:id="@+id/btnCode"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="@drawable/bg_card_glass"
+            android:src="@drawable/ic_code"
+            android:contentDescription="Coding Studio"
+            android:layout_marginEnd="8dp"/>
+
+        <ImageButton
+            android:id="@+id/btnSettings"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="@drawable/bg_card_glass"
+            android:src="@drawable/ic_settings"
+            android:contentDescription="Settings"/>
+    </LinearLayout>
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/chatRecycler"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginTop="12dp"
+        android:layout_marginBottom="12dp"
+        app:layout_constraintTop_toBottomOf="@id/topBar"
+        app:layout_constraintBottom_toTopOf="@id/orbContainer"/>
+
+    <FrameLayout
+        android:id="@+id/orbContainer"
+        android:layout_width="140dp"
+        android:layout_height="140dp"
+        app:layout_constraintBottom_toTopOf="@id/inputBar"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginBottom="12dp">
+
+        <View
+            android:id="@+id/orbView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@drawable/bg_orb"/>
+
+        <TextView
+            android:id="@+id/statusText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:text="Ready"
+            android:textColor="@color/text_primary"
+            android:textStyle="bold"/>
+    </FrameLayout>
+
+    <LinearLayout
+        android:id="@+id/inputBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:background="@drawable/bg_card_glass"
+        android:padding="8dp"
+        android:gravity="center_vertical"
+        app:layout_constraintBottom_toBottomOf="parent">
+
+        <ImageButton
+            android:id="@+id/btnMic"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="@drawable/bg_button_glow"
+            android:src="@drawable/ic_mic"
+            android:contentDescription="Voice"/>
+
+        <EditText
+            android:id="@+id/inputField"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:layout_marginEnd="8dp"
+            android:background="@android:color/transparent"
+            android:hint="@string/hint_ask_chotu"
+            android:textColor="@color/text_primary"
+            android:textColorHint="@color/text_secondary"
+            android:inputType="textMultiLine"/>
+
+        <ImageButton
+            android:id="@+id/btnSend"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="@drawable/bg_button_glow"
+            android:src="@drawable/ic_send"
+            android:contentDescription="Send"/>
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>
+EOF
+
+cat > app/src/main/res/layout/activity_settings.xml << 'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/deep_black"
+    android:padding="16dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Settings"
+            android:textColor="@color/text_primary"
+            android:textSize="28sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="16dp"/>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Gemini API Key"
+            android:textColor="@color/text_secondary"
+            android:layout_marginBottom="8dp"/>
+
+        <EditText
+            android:id="@+id/etApiKey"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_card_glass"
+            android:padding="14dp"
+            android:textColor="@color/text_primary"
+            android:inputType="textPassword"
+            android:hint="Paste API key here"
+            android:textColorHint="@color/text_secondary"
+            android:layout_marginBottom="12dp"/>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Model"
+            android:textColor="@color/text_secondary"
+            android:layout_marginBottom="8dp"/>
+
+        <Spinner
+            android:id="@+id/spinnerModel"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:background="@drawable/bg_card_glass"
+            android:padding="8dp"
+            android:layout_marginBottom="16dp"/>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Temperature: 0.7"
+            android:textColor="@color/text_secondary"
+            android:id="@+id/tvTemp"
+            android:layout_marginBottom="8dp"/>
+
+        <SeekBar
+            android:id="@+id/seekTemp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="100"
+            android:progress="70"
+            android:layout_marginBottom="20dp"/>
+
+        <Button
+            android:id="@+id/btnTest"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Test Connection"
+            android:background="@drawable/bg_button_glow"
+            android:textColor="@color/text_primary"
+            android:layout_marginBottom="12dp"/>
+
+        <Button
+            android:id="@+id/btnSave"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Save Settings"
+            android:background="@drawable/bg_button_glow"
+            android:textColor="@color/text_primary"
+            android:layout_marginBottom="12dp"/>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Developed by SOIKOT"
+            android:textColor="@color/text_secondary"
+            android:layout_gravity="center"
+            android:layout_marginTop="20dp"/>
+
+    </LinearLayout>
+</ScrollView>
+EOF
+
+cat > app/src/main/res/layout/activity_coding.xml << 'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/deep_black"
+    android:padding="16dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Coding Studio"
+        android:textColor="@color/text_primary"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="12dp"/>
+
+    <EditText
+        android:id="@+id/etCode"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:background="@drawable/bg_card_glass"
+        android:padding="12dp"
+        android:gravity="top|start"
+        android:textColor="@color/text_primary"
+        android:fontFamily="monospace"
+        android:hint="Write or paste code here..."
+        android:textColorHint="@color/text_secondary"
+        android:inputType="textMultiLine"/>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="12dp">
+
+        <Button
+            android:id="@+id/btnRun"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Run HTML"
+            android:background="@drawable/bg_button_glow"
+            android:textColor="@color/text_primary"
+            android:layout_marginEnd="6dp"/>
+
+        <Button
+            android:id="@+id/btnExplain"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Explain"
+            android:background="@drawable/bg_button_glow"
+            android:textColor="@color/text_primary"
+            android:layout_marginStart="6dp"/>
+    </LinearLayout>
+
+    <WebView
+        android:id="@+id/webPreview"
+        android:layout_width="match_parent"
+        android:layout_height="200dp"
+        android:layout_marginTop="12dp"
+        android:background="@drawable/bg_card_glass"
+        android:visibility="gone"/>
+</LinearLayout>
+EOF
+
+cat > app/src/main/res/layout/item_message.xml << 'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="8dp">
+
+    <TextView
+        android:id="@+id/tvRole"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textColor="@color/electric_blue"
+        android:textSize="12sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="4dp"/>
+
+    <TextView
+        android:id="@+id/tvMessage"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:background="@drawable/bg_card_glass"
+        android:padding="12dp"
+        android:textColor="@color/text_primary"
+        android:textSize="15sp"/>
+</LinearLayout>
+EOF
+
+echo "✅ Resources created"
+
+# ============ KOTLIN SOURCE ============
+mkdir -p app/src/main/java/com/soikot/chotuai/{ai,service,util}
+
+# SecurePrefs.kt
+cat > app/src/main/java/com/soikot/chotuai/util/SecurePrefs.kt << 'EOF'
+package com.soikot.chotuai.util
+
+import android.content.Context
+import android.content.SharedPreferences
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
+
+object SecurePrefs {
+    private fun getPrefs(context: Context): SharedPreferences {
+        val masterKey = MasterKey.Builder(context)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+            .build()
+        return EncryptedSharedPreferences.create(
+            context,
+            "chotu_secure",
+            masterKey,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+        )
+    }
+
+    fun saveApiKey(context: Context, key: String) {
+        getPrefs(context).edit().putString("gemini_api_key", key).apply()
+    }
+
+    fun getApiKey(context: Context): String? {
+        return getPrefs(context).getString("gemini_api_key", null)
+    }
+
+    fun saveSetting(context: Context, key: String, value: String) {
+        getPrefs(context).edit().putString(key, value).apply()
+    }
+
+    fun getSetting(context: Context, key: String, default: String = ""): String {
+        return getPrefs(context).getString(key, default) ?: default
+    }
+}
+EOF
+
+# AppLauncher.kt
+cat > app/src/main/java/com/soikot/chotuai/util/AppLauncher.kt << 'EOF'
+package com.soikot.chotuai.util
+
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+
+object AppLauncher {
+    fun openApp(context: Context, packageName: String): Boolean {
+        return try {
+            val intent = context.packageManager.getLaunchIntentForPackage(packageName)
+            if (intent != null) {
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(intent)
+                true
+            } else false
+        } catch (e: Exception) { false }
+    }
+
+    fun openUrl(context: Context, url: String) {
+        try {
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(intent)
+        } catch (e: Exception) { e.printStackTrace() }
+    }
+
+    fun searchGoogle(context: Context, query: String) {
+        openUrl(context, "https://www.google.com/search?q=" + Uri.encode(query))
+    }
+
+    fun searchYouTube(context: Context, query: String) {
+        val appIntent = Intent(Intent.ACTION_SEARCH)
+        appIntent.setPackage("com.google.android.youtube")
+        appIntent.putExtra("query", query)
+        appIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        try {
+            context.startActivity(appIntent)
+        } catch (e: Exception) {
+            openUrl(context, "https://www.youtube.com/results?search_query=" + Uri.encode(query))
+        }
+    }
+
+    fun getInstalledApps(context: Context): List<String> {
+        val pm = context.packageManager
+        val intents = pm.getInstalledApplications(PackageManager.GET_META_DATA)
+        return intents.map { it.packageName }
+    }
+}
+EOF
+
+# CommandParser.kt
+cat > app/src/main/java/com/soikot/chotuai/ai/CommandParser.kt << 'EOF'
+package com.soikot.chotuai.ai
+
+import android.content.Context
+import com.soikot.chotuai.util.AppLauncher
+import java.text.SimpleDateFormat
+import java.util.*
+
+sealed class CommandResult {
+    data class Handled(val response: String) : CommandResult()
+    object NotHandled : CommandResult()
+}
+
+object CommandParser {
+    fun parse(context: Context, input: String): CommandResult {
+        val lower = input.lowercase().trim()
+
+        // Time
+        if (lower.contains("time") || lower.contains("somoy") || lower.contains("সময়")) {
+            val time = SimpleDateFormat("hh:mm a", Locale.getDefault()).format(Date())
+            return CommandResult.Handled("Boss, ekhon somoy $time ⏰")
+        }
+
+        // Date
+        if (lower.contains("date") || lower.contains("tarikh") || lower.contains("তারিখ")) {
+            val date = SimpleDateFormat("EEEE, dd MMMM yyyy", Locale.getDefault()).format(Date())
+            return CommandResult.Handled("Ajker tarikh: $date 📅")
+        }
+
+        // Open YouTube
+        if (lower.contains("youtube") && (lower.contains("open") || lower.contains("kholo") || lower.contains("chalu"))) {
+            AppLauncher.openApp(context, "com.google.android.youtube")
+            return CommandResult.Handled("YouTube khule diyechi boss 🎬")
+        }
+
+        // Open Facebook
+        if (lower.contains("facebook") && (lower.contains("open") || lower.contains("kholo"))) {
+            AppLauncher.openApp(context, "com.facebook.katana")
+            return CommandResult.Handled("Facebook khule diyechi 📘")
+        }
+
+        // Open Google
+        if (lower.contains("google") && (lower.contains("open") || lower.contains("kholo"))) {
+            AppLauncher.openUrl(context, "https://www.google.com")
+            return CommandResult.Handled("Google khule diyechi 🔍")
+        }
+
+        // Search Google
+        if (lower.contains("search") || lower.contains("khoj") || lower.contains("খোঁজ")) {
+            val query = lower.replace(Regex("(chotu,?\\s*)?(search|khoj|khõj)\\s*(koro|kor|google e|google te)?\\s*"), "").trim()
+            if (query.isNotEmpty()) {
+                AppLauncher.searchGoogle(context, query)
+                return CommandResult.Handled("Google e '$query' search korchi 🔎")
+            }
+        }
+
+        // YouTube search
+        if (lower.contains("youtube") && (lower.contains("search") || lower.contains("play"))) {
+            val query = lower.replace(Regex("(chotu,?\\s*)?(youtube|play|search)\\s*(koro|e|te)?\\s*"), "").trim()
+            if (query.isNotEmpty()) {
+                AppLauncher.searchYouTube(context, query)
+                return CommandResult.Handled("YouTube e '$query' khujchi 🎵")
+            }
+        }
+
+        // Open settings
+        if (lower.contains("settings") || lower.contains("setings")) {
+            return CommandResult.Handled("Settings e jete chaile uporer gear icon e tap koro ⚙️")
+        }
+
+        return CommandResult.NotHandled
+    }
+}
+EOF
+
+# GeminiClient.kt
+cat > app/src/main/java/com/soikot/chotuai/ai/GeminiClient.kt << 'EOF'
+package com.soikot.chotuai.ai
+
+import android.content.Context
+import com.soikot.chotuai.util.SecurePrefs
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
+import org.json.JSONObject
+import java.util.concurrent.TimeUnit
+
+class GeminiClient(private val context: Context) {
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(60, TimeUnit.SECONDS)
+        .build()
+
+    private val systemPrompt = """
+You are Chotu, a friendly, funny, intelligent young male AI assistant.
+You talk like a close friend — casual, warm, respectful.
+You understand Bangla (Bengali script), Banglish (Bengali in English letters), and English.
+You respond in the same language/script the user uses.
+Never act robotic. Never say "As an AI...".
+Be helpful, funny when appropriate, and clear.
+Developer: SOIKOT.
+""".trimIndent()
+
+    suspend fun chat(userMessage: String, history: List<Pair<String, String>>): Result<String> =
+        withContext(Dispatchers.IO) {
+            try {
+                val apiKey = SecurePrefs.getApiKey(context)
+                    ?: return@withContext Result.failure(Exception("API key set koro settings theke boss 🔑"))
+
+                val model = SecurePrefs.getSetting(context, "model", "gemini-2.0-flash")
+                val temp = SecurePrefs.getSetting(context, "temperature", "0.7").toFloatOrNull() ?: 0.7f
+
+                val url = "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$apiKey"
+
+                val contents = JSONArray()
+
+                // System context as first user turn
+                val sysObj = JSONObject().apply {
+                    put("role", "user")
+                    put("parts", JSONArray().put(JSONObject().put("text", systemPrompt)))
+                }
+                contents.put(sysObj)
+                val sysResp = JSONObject().apply {
+                    put("role", "model")
+                    put("parts", JSONArray().put(JSONObject().put("text", "Understood boss! Ami Chotu, ready achi tomar help korar jonno 😎")))
+                }
+                contents.put(sysResp)
+
+                // History
+                history.forEach { (role, text) ->
+                    val obj = JSONObject().apply {
+                        put("role", if (role == "user") "user" else "model")
+                        put("parts", JSONArray().put(JSONObject().put("text", text)))
+                    }
+                    contents.put(obj)
+                }
+
+                // Current message
+                val current = JSONObject().apply {
+                    put("role", "user")
+                    put("parts", JSONArray().put(JSONObject().put("text", userMessage)))
+                }
+                contents.put(current)
+
+                val body = JSONObject().apply {
+                    put("contents", contents)
+                    put("generationConfig", JSONObject().apply {
+                        put("temperature", temp)
+                        put("maxOutputTokens", 2048)
+                    })
+                }
+
+                val request = Request.Builder()
+                    .url(url)
+                    .post(body.toString().toRequestBody("application/json".toMediaType()))
+                    .build()
+
+                val response = client.newCall(request).execute()
+                val responseBody = response.body?.string() ?: ""
+
+                if (!response.isSuccessful) {
+                    return@withContext Result.failure(Exception("API error: ${response.code} — $responseBody"))
+                }
+
+                val json = JSONObject(responseBody)
+                val candidates = json.optJSONArray("candidates")
+                if (candidates == null || candidates.length() == 0) {
+                    return@withContext Result.failure(Exception("Kono response pai ni boss 😕"))
+                }
+
+                val text = candidates.getJSONObject(0)
+                    .getJSONObject("content")
+                    .getJSONArray("parts")
+                    .getJSONObject(0)
+                    .getString("text")
+
+                Result.success(text)
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+
+    suspend fun testConnection(): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val apiKey = SecurePrefs.getApiKey(context)
+                ?: return@withContext Result.failure(Exception("API key nei"))
+            val model = SecurePrefs.getSetting(context, "model", "gemini-2.0-flash")
+            val url = "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$apiKey"
+            val body = JSONObject().apply {
+                put("contents", JSONArray().put(JSONObject().apply {
+                    put("role", "user")
+                    put("parts", JSONArray().put(JSONObject().put("text", "Say 'OK'")))
+                }))
+            }
+            val req = Request.Builder().url(url)
+                .post(body.toString().toRequestBody("application/json".toMediaType())).build()
+            val resp = client.newCall(req).execute()
+            if (resp.isSuccessful) Result.success("✅ Connection successful!")
+            else Result.failure(Exception("Failed: ${resp.code}"))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+}
+EOF
+
+# VoiceManager.kt
+cat > app/src/main/java/com/soikot/chotuai/ai/VoiceManager.kt << 'EOF'
+package com.soikot.chotuai.ai
+
+import android.content.Context
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
+import android.speech.tts.TextToSpeech
+import java.util.*
+
+class VoiceManager(private val context: Context) {
+    private var tts: TextToSpeech? = null
+    private var recognizer: SpeechRecognizer? = null
+    var onResult: ((String) -> Unit)? = null
+    var onError: ((String) -> Unit)? = null
+    var onReadyForSpeech: (() -> Unit)? = null
+
+    init {
+        tts = TextToSpeech(context) { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                tts?.language = Locale("bn", "BD")
+                if (tts?.isLanguageAvailable(Locale("bn", "BD")) == TextToSpeech.LANG_MISSING_DATA) {
+                    tts?.language = Locale.ENGLISH
+                }
+            }
+        }
+    }
+
+    fun speak(text: String) {
+        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "chotu_" + System.currentTimeMillis())
+    }
+
+    fun stopSpeaking() {
+        tts?.stop()
+    }
+
+    fun startListening() {
+        if (!SpeechRecognizer.isRecognitionAvailable(context)) {
+            onError?.invoke("Voice recognition available na")
+            return
+        }
+        recognizer = SpeechRecognizer.createSpeechRecognizer(context)
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "bn-BD")
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+        }
+        recognizer?.setRecognitionListener(object : RecognitionListener {
+            override fun onResults(results: android.os.Bundle?) {
+                val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                if (!matches.isNullOrEmpty()) onResult?.invoke(matches[0])
+            }
+            override fun onReadyForSpeech(params: android.os.Bundle?) { onReadyForSpeech?.invoke() }
+            override fun onError(error: Int) { onError?.invoke("Voice error: $error") }
+            override fun onBeginningOfSpeech() {}
+            override fun onBufferReceived(buffer: ByteArray?) {}
+            override fun onEndOfSpeech() {}
+            override fun onEvent(eventType: Int, params: android.os.Bundle?) {}
+            override fun onPartialResults(partialResults: android.os.Bundle?) {}
+            override fun onRmsChanged(rmsdB: Float) {}
+        })
+        recognizer?.startListening(intent)
+    }
+
+    fun stopListening() {
+        recognizer?.stopListening()
+        recognizer?.destroy()
+        recognizer = null
+    }
+
+    fun shutdown() {
+        tts?.stop()
+        tts?.shutdown()
+        stopListening()
+    }
+}
+EOF
+
+# MemoryManager.kt
+cat > app/src/main/java/com/soikot/chotuai/ai/MemoryManager.kt << 'EOF'
+package com.soikot.chotuai.ai
+
+import android.content.Context
+import org.json.JSONArray
+import org.json.JSONObject
+
+object MemoryManager {
+    private const val PREFS = "chotu_memory"
+    private const val KEY_HISTORY = "history"
+    private const val KEY_FACTS = "facts"
+
+    private fun prefs(context: Context) =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+
+    fun saveMessage(context: Context, role: String, text: String) {
+        val arr = JSONArray(getHistory(context))
+        arr.put(JSONObject().apply {
+            put("role", role)
+            put("text", text)
+            put("time", System.currentTimeMillis())
+        })
+        // Keep last 50
+        while (arr.length() > 100) arr.remove(0)
+        prefs(context).edit().putString(KEY_HISTORY, arr.toString()).apply()
+    }
+
+    fun getHistory(context: Context): List<Pair<String, String>> {
+        val raw = prefs(context).getString(KEY_HISTORY, "[]") ?: "[]"
+        val arr = JSONArray(raw)
+        val list = mutableListOf<Pair<String, String>>()
+        for (i in 0 until arr.length()) {
+            val o = arr.getJSONObject(i)
+            list.add(o.getString("role") to o.getString("text"))
+        }
+        return list
+    }
+
+    fun clearHistory(context: Context) {
+        prefs(context).edit().remove(KEY_HISTORY).apply()
+    }
+}
+EOF
+
+# ChotuAccessibilityService.kt
+cat > app/src/main/java/com/soikot/chotuai/service/ChotuAccessibilityService.kt << 'EOF'
+package com.soikot.chotuai.service
+
+import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.GestureDescription
+import android.graphics.Path
+import android.os.Build
+import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityNodeInfo
+
+class ChotuAccessibilityService : AccessibilityService() {
+
+    override fun onServiceConnected() {
+        super.onServiceConnected()
+        instance = this
+    }
+
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
+    override fun onInterrupt() {}
+
+    override fun onDestroy() {
+        super.onDestroy()
+        instance = null
+    }
+
+    fun tap(x: Float, y: Float) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            val path = Path().apply { moveTo(x, y) }
+            val gesture = GestureDescription.Builder()
+                .addStroke(GestureDescription.StrokeDescription(path, 0, 100))
+                .build()
+            dispatchGesture(gesture, null, null)
+        }
+    }
+
+    fun swipeUp() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            val path = Path().apply {
+                moveTo(540f, 1500f)
+                lineTo(540f, 500f)
+            }
+            val gesture = GestureDescription.Builder()
+                .addStroke(GestureDescription.StrokeDescription(path, 0, 500))
+                .build()
+            dispatchGesture(gesture, null, null)
+        }
+    }
+
+    fun swipeDown() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            val path = Path().apply {
+                moveTo(540f, 500f)
+                lineTo(540f, 1500f)
+            }
+            val gesture = GestureDescription.Builder()
+                .addStroke(GestureDescription.StrokeDescription(path, 0, 500))
+                .build()
+            dispatchGesture(gesture, null, null)
+        }
+    }
+
+    fun pressBack() = performGlobalAction(GLOBAL_ACTION_BACK)
+    fun pressHome() = performGlobalAction(GLOBAL_ACTION_HOME)
+    fun pressRecents() = performGlobalAction(GLOBAL_ACTION_RECENTS)
+
+    fun readScreenText(): String {
+        val root = rootInActiveWindow ?: return ""
+        val texts = mutableListOf<String>()
+        collectText(root, texts)
+        return texts.joinToString("\n")
+    }
+
+    private fun collectText(node: AccessibilityNodeInfo, list: MutableList<String>) {
+        node.text?.let { if (it.isNotBlank()) list.add(it.toString()) }
+        for (i in 0 until node.childCount) {
+            node.getChild(i)?.let { collectText(it, list) }
+        }
+    }
+
+    companion object {
+        var instance: ChotuAccessibilityService? = null
+            private set
+    }
+}
+EOF
+
+# MessageAdapter.kt
+cat > app/src/main/java/com/soikot/chotuai/MessageAdapter.kt << 'EOF'
+package com.soikot.chotuai
+
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
+import android.widget.TextView
+import androidx.recyclerview.widget.RecyclerView
+
+data class Message(val role: String, val text: String)
+
+class MessageAdapter(private val messages: MutableList<Message>) :
+    RecyclerView.Adapter<MessageAdapter.VH>() {
+
+    class VH(view: View) : RecyclerView.ViewHolder(view) {
+        val tvRole: TextView = view.findViewById(R.id.tvRole)
+        val tvMsg: TextView = view.findViewById(R.id.tvMessage)
+    }
+
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
+        val v = LayoutInflater.from(parent.context).inflate(R.layout.item_message, parent, false)
+        return VH(v)
+    }
+
+    override fun onBindViewHolder(holder: VH, position: Int) {
+        val m = messages[position]
+        holder.tvRole.text = if (m.role == "user") "You" else "Chotu"
+        holder.tvMsg.text = m.text
+    }
+
+    override fun getItemCount() = messages.size
+
+    fun addMessage(m: Message) {
+        messages.add(m)
+        notifyItemInserted(messages.size - 1)
+    }
+
+    fun clear() {
+        val s = messages.size
+        messages.clear()
+        notifyItemRangeRemoved(0, s)
+    }
+}
+EOF
+
+# MainActivity.kt
+cat > app/src/main/java/com/soikot/chotuai/MainActivity.kt << 'EOF'
+package com.soikot.chotuai
+
+import android.content.Intent
+import android.os.Bundle
+import android.view.animation.AnimationUtils
+import android.widget.EditText
+import android.widget.ImageButton
+import android.widget.TextView
+import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
+import com.soikot.chotuai.ai.CommandParser
+import com.soikot.chotuai.ai.CommandResult
+import com.soikot.chotuai.ai.GeminiClient
+import com.soikot.chotuai.ai.MemoryManager
+import com.soikot.chotuai.ai.VoiceManager
+import com.soikot.chotuai.util.SecurePrefs
+import kotlinx.coroutines.launch
+
+class MainActivity : AppCompatActivity() {
+
+    private lateinit var recycler: RecyclerView
+    private lateinit var adapter: MessageAdapter
+    private lateinit var inputField: EditText
+    private lateinit var btnSend: ImageButton
+    private lateinit var btnMic: ImageButton
+    private lateinit var btnSettings: ImageButton
+    private lateinit var btnCode: ImageButton
+    private lateinit var statusText: TextView
+    private lateinit var orbView: android.view.View
+
+    private lateinit var voice: VoiceManager
+    private lateinit var gemini: GeminiClient
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
+
+        recycler = findViewById(R.id.chatRecycler)
+        inputField = findViewById(R.id.inputField)
+        btnSend = findViewById(R.id.btnSend)
+        btnMic = findViewById(R.id.btnMic)
+        btnSettings = findViewById(R.id.btnSettings)
+        btnCode = findViewById(R.id.btnCode)
+        statusText = findViewById(R.id.statusText)
+        orbView = findViewById(R.id.orbView)
+
+        adapter = MessageAdapter(MemoryManager.getHistory(this).map { Message(it.first, it.second) }.toMutableList())
+        recycler.layoutManager = LinearLayoutManager(this)
+        recycler.adapter = adapter
+
+        voice = VoiceManager(this)
+        gemini = GeminiClient(this)
+
+        setupVoice()
+        setupButtons()
+
+        if (SecurePrefs.getApiKey(this).isNullOrEmpty()) {
+            Toast.makeText(this, "Settings e giye Gemini API key dao boss 🔑", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun setupVoice() {
+        voice.onResult = { text ->
+            inputField.setText(text)
+            sendMessage(text)
+        }
+        voice.onError = { err ->
+            statusText.text = "Error"
+            Toast.makeText(this, err, Toast.LENGTH_SHORT).show()
+        }
+        voice.onReadyForSpeech = {
+            statusText.text = "Listening..."
+        }
+    }
+
+    private fun setupButtons() {
+        btnSend.setOnClickListener {
+            val text = inputField.text.toString().trim()
+            if (text.isNotEmpty()) {
+                inputField.setText("")
+                sendMessage(text)
+            }
+        }
+
+        btnMic.setOnClickListener {
+            statusText.text = "Listening..."
+            voice.startListening()
+        }
+
+        btnSettings.setOnClickListener {
+            startActivity(Intent(this, SettingsActivity::class.java))
+        }
+
+        btnCode.setOnClickListener {
+            startActivity(Intent(this, CodingStudioActivity::class.java))
+        }
+
+        // Orb pulse animation
+        val pulse = AnimationUtils.loadAnimation(this, android.R.anim.fade_in)
+        orbView.startAnimation(pulse)
+    }
+
+    private fun sendMessage(text: String) {
+        adapter.addMessage(Message("user", text))
+        MemoryManager.saveMessage(this, "user", text)
+        recycler.scrollToPosition(adapter.itemCount - 1)
+
+        // Check local commands first
+        when (val cmd = CommandParser.parse(this, text)) {
+            is CommandResult.Handled -> {
+                adapter.addMessage(Message("model", cmd.response))
+                MemoryManager.saveMessage(this, "model", cmd.response)
+                voice.speak(cmd.response)
+                recycler.scrollToPosition(adapter.itemCount - 1)
+            }
+            CommandResult.NotHandled -> {
+                if (SecurePrefs.getApiKey(this).isNullOrEmpty()) {
+                    val msg = "Boss, API key set koro age! Settings e giye Gemini API key paste kor 🔑"
+                    adapter.addMessage(Message("model", msg))
+                    MemoryManager.saveMessage(this, "model", msg)
+                    voice.speak(msg)
+                    return
+                }
+                statusText.text = "Thinking..."
+                lifecycleScope.launch {
+                    val result = gemini.chat(text, MemoryManager.getHistory(this@MainActivity).dropLast(1))
+                    result.fold(
+                        onSuccess = { reply ->
+                            statusText.text = "Ready"
+                            adapter.addMessage(Message("model", reply))
+                            MemoryManager.saveMessage(this@MainActivity, "model", reply)
+                            voice.speak(reply)
+                            recycler.scrollToPosition(adapter.itemCount - 1)
+                        },
+                        onFailure = { e ->
+                            statusText.text = "Error"
+                            val msg = "Sorry boss, error hoise: ${e.message}"
+                            adapter.addMessage(Message("model", msg))
+                            recycler.scrollToPosition(adapter.itemCount - 1)
+                        }
+                    )
+                }
+            }
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        voice.shutdown()
+    }
+}
+EOF
+
+# SettingsActivity.kt
+cat > app/src/main/java/com/soikot/chotuai/SettingsActivity.kt << 'EOF'
+package com.soikot.chotuai
+
+import android.os.Bundle
+import android.widget.ArrayAdapter
+import android.widget.Button
+import android.widget.EditText
+import android.widget.SeekBar
+import android.widget.Spinner
+import android.widget.TextView
+import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
+import com.soikot.chotuai.ai.GeminiClient
+import com.soikot.chotuai.util.SecurePrefs
+import kotlinx.coroutines.launch
+
+class SettingsActivity : AppCompatActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_settings)
+
+        val etKey = findViewById<EditText>(R.id.etApiKey)
+        val spinner = findViewById<Spinner>(R.id.spinnerModel)
+        val seekTemp = findViewById<SeekBar>(R.id.seekTemp)
+        val tvTemp = findViewById<TextView>(R.id.tvTemp)
+        val btnSave = findViewById<Button>(R.id.btnSave)
+        val btnTest = findViewById<Button>(R.id.btnTest)
+
+        val models = arrayOf("gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro")
+        spinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, models)
+
+        etKey.setText(SecurePrefs.getApiKey(this) ?: "")
+        val savedModel = SecurePrefs.getSetting(this, "model", "gemini-2.0-flash")
+        spinner.setSelection(models.indexOf(savedModel).coerceAtLeast(0))
+        val savedTemp = SecurePrefs.getSetting(this, "temperature", "0.7").toFloatOrNull() ?: 0.7f
+        seekTemp.progress = (savedTemp * 100).toInt()
+        tvTemp.text = "Temperature: ${"%.2f".format(savedTemp)}"
+
+        seekTemp.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(s: SeekBar?, p: Int, u: Boolean) {
+                tvTemp.text = "Temperature: ${"%.2f".format(p / 100f)}"
+            }
+            override fun onStartTrackingTouch(s: SeekBar?) {}
+            override fun onStopTrackingTouch(s: SeekBar?) {}
+        })
+
+        btnSave.setOnClickListener {
+            SecurePrefs.saveApiKey(this, etKey.text.toString().trim())
+            SecurePrefs.saveSetting(this, "model", spinner.selectedItem.toString())
+            SecurePrefs.saveSetting(this, "temperature", (seekTemp.progress / 100f).toString())
+            Toast.makeText(this, "✅ Saved boss!", Toast.LENGTH_SHORT).show()
+            finish()
+        }
+
+        btnTest.setOnClickListener {
+            SecurePrefs.saveApiKey(this, etKey.text.toString().trim())
+            SecurePrefs.saveSetting(this, "model", spinner.selectedItem.toString())
+            btnTest.isEnabled = false
+            btnTest.text = "Testing..."
+            lifecycleScope.launch {
+                val r = GeminiClient(this@SettingsActivity).testConnection()
+                btnTest.isEnabled = true
+                btnTest.text = "Test Connection"
+                r.fold(
+                    onSuccess = { Toast.makeText(this@SettingsActivity, it, Toast.LENGTH_LONG).show() },
+                    onFailure = { Toast.makeText(this@SettingsActivity, "❌ ${it.message}", Toast.LENGTH_LONG).show() }
+                )
+            }
+        }
+    }
+}
+EOF
+
+# CodingStudioActivity.kt
+cat > app/src/main/java/com/soikot/chotuai/CodingStudioActivity.kt << 'EOF'
+package com.soikot.chotuai
+
+import android.os.Bundle
+import android.view.View
+import android.webkit.WebView
+import android.widget.Button
+import android.widget.EditText
+import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
+import com.soikot.chotuai.ai.GeminiClient
+import com.soikot.chotuai.util.SecurePrefs
+import kotlinx.coroutines.launch
+
+class CodingStudioActivity : AppCompatActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_coding)
+
+        val etCode = findViewById<EditText>(R.id.etCode)
+        val btnRun = findViewById<Button>(R.id.btnRun)
+        val btnExplain = findViewById<Button>(R.id.btnExplain)
+        val web = findViewById<WebView>(R.id.webPreview)
+        web.settings.javaScriptEnabled = true
+
+        btnRun.setOnClickListener {
+            val code = etCode.text.toString()
+            if (code.contains("<html", true) || code.contains("<body", true) || code.contains("<div", true)) {
+                web.visibility = View.VISIBLE
+                web.loadDataWithBaseURL(null, code, "text/html", "UTF-8", null)
+            } else {
+                Toast.makeText(this, "HTML code dao boss", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        btnExplain.setOnClickListener {
+            val code = etCode.text.toString()
+            if (SecurePrefs.getApiKey(this).isNullOrEmpty()) {
+                Toast.makeText(this, "API key set koro age", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            btnExplain.isEnabled = false
+            btnExplain.text = "Analyzing..."
+            lifecycleScope.launch {
+                val r = GeminiClient(this@CodingStudioActivity).chat(
+                    "Explain this code simply:\n\n$code", emptyList()
+                )
+                btnExplain.isEnabled = true
+                btnExplain.text = "Explain"
+                r.fold(
+                    onSuccess = { reply ->
+                        etCode.setText("$code\n\n/* === EXPLANATION ===\n$reply\n*/")
+                    },
+                    onFailure = { Toast.makeText(this@CodingStudioActivity, it.message, Toast.LENGTH_LONG).show() }
+                )
+            }
+        }
+    }
+}
+EOF
+
+echo "✅ All Kotlin sources created"
+
+# ============ ZIP ============
+cd ..
+zip -r ChotuAI.zip $PROJECT
+echo ""
+echo "========================================="
+echo "✅ SUCCESS! File created: ChotuAI.zip"
+echo "========================================="
+echo "Size: $(du -h ChotuAI.zip | cut -f1)"
+echo ""
+echo "Next: Build with Gradle or import to Android Studio"
